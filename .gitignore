@@ -1,0 +1,16 @@
+node_modules/
+dist/
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+*.iml
+.idea/
+.vscode/
+*.log
+.env
+.DS_Store
+server/data/
+apps/mobile/.dart_tool/
+apps/mobile/build/

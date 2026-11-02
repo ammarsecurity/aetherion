@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AetherionCard",
+  "type": "object",
+  "required": ["id", "nameAr", "nameEn", "type", "textAr"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "nameAr": { "type": "string" },
+    "nameEn": { "type": "string" },
+    "type": { "enum": ["monster", "spell", "trap"] },
+    "element": { "enum": ["shadow", "light", "flame", "tide", "stone", "aether"] },
+    "level": { "type": "integer", "minimum": 1, "maximum": 12 },
+    "atk": { "type": "integer", "minimum": 0 },
+    "def": { "type": "integer", "minimum": 0 },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "textAr": { "type": "string" },
+    "textEn": { "type": "string" },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["trigger", "ops"],
+        "properties": {
+          "trigger": {
+            "enum": [
+              "on_summon",
+              "on_play",
+              "on_activate",
+              "on_destroy",
+              "on_attack_declare",
+              "start_turn",
+              "end_turn"
+            ]
+          },
+          "requiresTarget": { "type": "boolean" },
+          "conditions": { "type": "array" },
+          "ops": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["op"],
+              "properties": {
+                "op": {
+                  "enum": [
+                    "draw",
+                    "damage",
+                    "heal",
+                    "buff_stat",
+                    "destroy_target",
+                    "change_position",
+                    "summon_token"
+                  ]
+                },
+                "target": { "type": "string" },
+                "count": { "type": "integer" },
+                "amount": { "type": "integer" },
+                "stat": { "enum": ["atk", "def"] },
+                "position": { "enum": ["attack", "defense"] },
+                "tokenId": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,188 @@
+:root {
+  --duel-sky: #9ec9f5;
+  --duel-panel: rgba(255, 255, 255, 0.82);
+  --duel-panel-strong: rgba(248, 252, 255, 0.94);
+  --duel-ink: #1d2a44;
+  --duel-muted: #5b6b88;
+  --duel-blue: #3d8dff;
+  --duel-blue-deep: #2563d8;
+  --duel-cyan: #5de4ff;
+  --duel-gold: #f0c14b;
+  --duel-gold-deep: #d4a017;
+  --duel-danger: #e85a5a;
+  --duel-slot: rgba(70, 120, 190, 0.22);
+  --duel-slot-border: rgba(120, 170, 230, 0.55);
+  --duel-shadow: 0 10px 24px rgba(20, 40, 80, 0.28);
+  --card-ratio: 2.5 / 3.5;
+}
+
+@keyframes duel-summon-rise {
+  0% {
+    transform: translateY(18px) scale(0.92);
+    filter: brightness(1.8);
+    opacity: 0.3;
+  }
+  55% {
+    transform: translateY(-6px) scale(1.04);
+    filter: brightness(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: brightness(1);
+    opacity: 1;
+  }
+}
+
+@keyframes duel-summon-rise-defense {
+  0% {
+    transform: translate(-50%, -50%) rotate(90deg) translateY(18px) scale(0.92);
+    filter: brightness(1.8);
+    opacity: 0.3;
+  }
+  55% {
+    transform: translate(-50%, -50%) rotate(90deg) translateY(-6px) scale(1.04);
+    filter: brightness(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(90deg);
+    filter: brightness(1);
+    opacity: 1;
+  }
+}
+
+@keyframes duel-hit-defense {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+  25% {
+    transform: translate(-50%, -50%) rotate(90deg) translateX(-6px);
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(90deg) translateX(6px);
+  }
+  75% {
+    transform: translate(-50%, -50%) rotate(90deg) translateX(-3px);
+  }
+}
+
+@keyframes duel-ring {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
+@keyframes duel-spark {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-28px) scale(0.4);
+    opacity: 0;
+  }
+}
+
+@keyframes duel-hit {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  50% {
+    transform: translateX(6px);
+  }
+  75% {
+    transform: translateX(-3px);
+  }
+}
+
+@keyframes duel-lp-flash {
+  0% {
+    color: var(--duel-danger);
+    transform: scale(1.15);
+  }
+  100% {
+    color: inherit;
+    transform: scale(1);
+  }
+}
+
+@keyframes duel-spell-burst {
+  0% {
+    box-shadow: 0 0 0 0 rgba(93, 228, 255, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 18px rgba(93, 228, 255, 0);
+  }
+}
+
+.duel-summoning {
+  animation: duel-summon-rise 0.85s ease-out;
+  z-index: 5;
+}
+
+.duel-summoning::before {
+  content: '';
+  position: absolute;
+  inset: -18%;
+  border-radius: 16px;
+  background: radial-gradient(circle, rgba(255, 230, 120, 0.55), rgba(93, 228, 255, 0.2) 45%, transparent 70%);
+  animation: duel-summon-glow 0.85s ease-out forwards;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.duel-summoning::after {
+  content: '';
+  position: absolute;
+  inset: -14%;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 210, 70, 0.95);
+  box-shadow: 0 0 18px rgba(93, 228, 255, 0.8);
+  animation: duel-ring 0.85s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes duel-summon-glow {
+  0% {
+    opacity: 0.2;
+    transform: scale(0.7);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+.duel-hit {
+  animation: duel-hit 0.45s ease-in-out;
+  filter: brightness(1.35) saturate(1.2);
+}
+
+.duel-lp-flash {
+  animation: duel-lp-flash 0.55s ease;
+}
+
+.duel-spell-fx {
+  animation: duel-spell-burst 0.55s ease-out;
+}
+
+.duel-attacker-glow {
+  box-shadow:
+    0 0 0 3px rgba(93, 228, 255, 0.95),
+    0 0 22px rgba(93, 228, 255, 0.7) !important;
+}

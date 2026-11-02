@@ -1,0 +1,16 @@
+{
+  "name": "aetherion",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "server",
+    "apps/web"
+  ],
+  "scripts": {
+    "build:core": "npm run build -w @aetherion/game-core",
+    "validate:cards": "npm run validate -w @aetherion/cards",
+    "dev:server": "npm run dev -w @aetherion/server",
+    "dev:web": "npm run dev -w @aetherion/web",
+    "build": "npm run build -w @aetherion/game-core && npm run build -w @aetherion/server && npm run build -w @aetherion/web"
+  }
+}

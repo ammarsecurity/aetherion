@@ -1,0 +1,20 @@
+{
+  "name": "@aetherion/game-core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --experimental-vm-modules node_modules/typescript/bin/tsc && node --test dist/**/*.test.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

@@ -1,0 +1,455 @@
+[
+  {
+    "id": "aether_token",
+    "nameAr": "شظية أثير",
+    "nameEn": "Aether Shard",
+    "type": "monster",
+    "element": "aether",
+    "level": 1,
+    "atk": 500,
+    "def": 500,
+    "tags": ["token", "aether"],
+    "textAr": "وحش رمزي يُستدعى بالتأثيرات."
+  },
+  {
+    "id": "shadow_wisp",
+    "nameAr": "شعلة الظل",
+    "nameEn": "Shadow Wisp",
+    "type": "monster",
+    "element": "shadow",
+    "level": 2,
+    "atk": 800,
+    "def": 600,
+    "tags": ["wisp", "shadow"],
+    "textAr": "عند الاستدعاء: اسحب ورقة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "draw", "count": 1 }] }]
+  },
+  {
+    "id": "dusk_stalker",
+    "nameAr": "مقتفي الغسق",
+    "nameEn": "Dusk Stalker",
+    "type": "monster",
+    "element": "shadow",
+    "level": 3,
+    "atk": 1400,
+    "def": 900,
+    "tags": ["beast", "shadow"],
+    "textAr": "وحش ظل سريع."
+  },
+  {
+    "id": "veil_serpent",
+    "nameAr": "ثعبان الحجاب",
+    "nameEn": "Veil Serpent",
+    "type": "monster",
+    "element": "shadow",
+    "level": 4,
+    "atk": 1600,
+    "def": 1200,
+    "tags": ["serpent", "shadow"],
+    "textAr": "عند الاستدعاء: ألحق 400 ضرر بالخصم.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "damage", "target": "opponent", "amount": 400 }] }]
+  },
+  {
+    "id": "night_crown",
+    "nameAr": "تاج الليل",
+    "nameEn": "Night Crown",
+    "type": "monster",
+    "element": "shadow",
+    "level": 5,
+    "atk": 2000,
+    "def": 1500,
+    "tags": ["royal", "shadow"],
+    "textAr": "سيد ظلال متوسط القوة."
+  },
+  {
+    "id": "solar_cub",
+    "nameAr": "شبل الشمس",
+    "nameEn": "Solar Cub",
+    "type": "monster",
+    "element": "light",
+    "level": 2,
+    "atk": 900,
+    "def": 700,
+    "tags": ["beast", "light"],
+    "textAr": "عند الاستدعاء: استعد 500 حياة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "heal", "target": "self", "amount": 500 }] }]
+  },
+  {
+    "id": "lantern_guard",
+    "nameAr": "حارس الفانوس",
+    "nameEn": "Lantern Guard",
+    "type": "monster",
+    "element": "light",
+    "level": 3,
+    "atk": 1100,
+    "def": 1800,
+    "tags": ["guard", "light"],
+    "textAr": "مدافع متين من نور."
+  },
+  {
+    "id": "radiant_spear",
+    "nameAr": "رمح الشعاع",
+    "nameEn": "Radiant Spear",
+    "type": "monster",
+    "element": "light",
+    "level": 4,
+    "atk": 1700,
+    "def": 1000,
+    "tags": ["warrior", "light"],
+    "textAr": "محارب ضوء هجومي."
+  },
+  {
+    "id": "dawn_sentinel",
+    "nameAr": "حارس الفجر",
+    "nameEn": "Dawn Sentinel",
+    "type": "monster",
+    "element": "light",
+    "level": 5,
+    "atk": 1900,
+    "def": 1600,
+    "tags": ["guard", "light"],
+    "textAr": "عند الاستدعاء: اسحب ورقة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "draw", "count": 1 }] }]
+  },
+  {
+    "id": "ember_sprite",
+    "nameAr": "جنية الجمر",
+    "nameEn": "Ember Sprite",
+    "type": "monster",
+    "element": "flame",
+    "level": 2,
+    "atk": 1000,
+    "def": 400,
+    "tags": ["sprite", "flame"],
+    "textAr": "شرارة حارقة صغيرة."
+  },
+  {
+    "id": "cinder_wolf",
+    "nameAr": "ذئب الرماد",
+    "nameEn": "Cinder Wolf",
+    "type": "monster",
+    "element": "flame",
+    "level": 3,
+    "atk": 1500,
+    "def": 800,
+    "tags": ["beast", "flame"],
+    "textAr": "عند الاستدعاء: ألحق 300 ضرر.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "damage", "target": "opponent", "amount": 300 }] }]
+  },
+  {
+    "id": "magma_brute",
+    "nameAr": "عملاق الصهارة",
+    "nameEn": "Magma Brute",
+    "type": "monster",
+    "element": "flame",
+    "level": 4,
+    "atk": 1800,
+    "def": 1100,
+    "tags": ["brute", "flame"],
+    "textAr": "قوة نارية خام."
+  },
+  {
+    "id": "phoenix_ash",
+    "nameAr": "رماد العنقاء",
+    "nameEn": "Phoenix Ash",
+    "type": "monster",
+    "element": "flame",
+    "level": 6,
+    "atk": 2200,
+    "def": 1400,
+    "tags": ["phoenix", "flame"],
+    "textAr": "عند الاستدعاء: استعد 800 حياة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "heal", "target": "self", "amount": 800 }] }]
+  },
+  {
+    "id": "tide_minnow",
+    "nameAr": "سمكة المد",
+    "nameEn": "Tide Minnow",
+    "type": "monster",
+    "element": "tide",
+    "level": 1,
+    "atk": 500,
+    "def": 1000,
+    "tags": ["fish", "tide"],
+    "textAr": "عند الاستدعاء: اسحب ورقة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "draw", "count": 1 }] }]
+  },
+  {
+    "id": "coral_knight",
+    "nameAr": "فارس المرجان",
+    "nameEn": "Coral Knight",
+    "type": "monster",
+    "element": "tide",
+    "level": 3,
+    "atk": 1300,
+    "def": 1500,
+    "tags": ["warrior", "tide"],
+    "textAr": "حارس سواحل متوازن."
+  },
+  {
+    "id": "abyss_ray",
+    "nameAr": "شعاع الهاوية",
+    "nameEn": "Abyss Ray",
+    "type": "monster",
+    "element": "tide",
+    "level": 4,
+    "atk": 1700,
+    "def": 900,
+    "tags": ["ray", "tide"],
+    "textAr": "صياد أعماق سريع."
+  },
+  {
+    "id": "tidal_colossus",
+    "nameAr": "عملاق المد",
+    "nameEn": "Tidal Colossus",
+    "type": "monster",
+    "element": "tide",
+    "level": 6,
+    "atk": 2300,
+    "def": 1800,
+    "tags": ["colossus", "tide"],
+    "textAr": "وحش بحري ثقيل."
+  },
+  {
+    "id": "pebble_golem",
+    "nameAr": "غول الحصى",
+    "nameEn": "Pebble Golem",
+    "type": "monster",
+    "element": "stone",
+    "level": 2,
+    "atk": 700,
+    "def": 1400,
+    "tags": ["golem", "stone"],
+    "textAr": "مدافع حجري صغير."
+  },
+  {
+    "id": "granite_warden",
+    "nameAr": "حارس الجرانيت",
+    "nameEn": "Granite Warden",
+    "type": "monster",
+    "element": "stone",
+    "level": 4,
+    "atk": 1200,
+    "def": 2000,
+    "tags": ["golem", "stone"],
+    "textAr": "درع صخري صلب."
+  },
+  {
+    "id": "quake_beast",
+    "nameAr": "وحش الزلزال",
+    "nameEn": "Quake Beast",
+    "type": "monster",
+    "element": "stone",
+    "level": 5,
+    "atk": 2100,
+    "def": 1300,
+    "tags": ["beast", "stone"],
+    "textAr": "عند الاستدعاء: ألحق 500 ضرر.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "damage", "target": "opponent", "amount": 500 }] }]
+  },
+  {
+    "id": "aether_moth",
+    "nameAr": "فراشة الأثير",
+    "nameEn": "Aether Moth",
+    "type": "monster",
+    "element": "aether",
+    "level": 2,
+    "atk": 600,
+    "def": 600,
+    "tags": ["moth", "aether"],
+    "textAr": "عند الاستدعاء: استدعِ شظية أثير.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "summon_token", "tokenId": "aether_token" }] }]
+  },
+  {
+    "id": "starweave_mage",
+    "nameAr": "ساحر نسيج النجوم",
+    "nameEn": "Starweave Mage",
+    "type": "monster",
+    "element": "aether",
+    "level": 4,
+    "atk": 1500,
+    "def": 1500,
+    "tags": ["mage", "aether"],
+    "textAr": "عند الاستدعاء: اسحب ورقة.",
+    "effects": [{ "trigger": "on_summon", "ops": [{ "op": "draw", "count": 1 }] }]
+  },
+  {
+    "id": "nebula_drake",
+    "nameAr": "تنين السديم",
+    "nameEn": "Nebula Drake",
+    "type": "monster",
+    "element": "aether",
+    "level": 6,
+    "atk": 2400,
+    "def": 1600,
+    "tags": ["drake", "aether"],
+    "textAr": "تنين أثيري نادر."
+  },
+  {
+    "id": "spark_draw",
+    "nameAr": "شرارة السحب",
+    "nameEn": "Spark Draw",
+    "type": "spell",
+    "element": "aether",
+    "textAr": "اسحب ورقتين.",
+    "effects": [{ "trigger": "on_play", "ops": [{ "op": "draw", "count": 2 }] }]
+  },
+  {
+    "id": "vital_bloom",
+    "nameAr": "ازدهار الحيوية",
+    "nameEn": "Vital Bloom",
+    "type": "spell",
+    "element": "light",
+    "textAr": "استعد 1200 حياة.",
+    "effects": [{ "trigger": "on_play", "ops": [{ "op": "heal", "target": "self", "amount": 1200 }] }]
+  },
+  {
+    "id": "ember_bolt",
+    "nameAr": "صاعقة الجمر",
+    "nameEn": "Ember Bolt",
+    "type": "spell",
+    "element": "flame",
+    "tags": ["quick"],
+    "textAr": "تعويذة سريعة: ألحق 800 ضرر بالخصم. (إن عُيّنت لا تُفعَّل بنفس الدور)",
+    "effects": [{ "trigger": "on_play", "ops": [{ "op": "damage", "target": "opponent", "amount": 800 }] }]
+  },
+  {
+    "id": "shadow_cut",
+    "nameAr": "قطع الظل",
+    "nameEn": "Shadow Cut",
+    "type": "spell",
+    "element": "shadow",
+    "textAr": "دمّر كل وحوش الخصم.",
+    "effects": [{ "trigger": "on_play", "ops": [{ "op": "destroy_target", "target": "all_enemy_monsters" }] }]
+  },
+  {
+    "id": "tide_pulse",
+    "nameAr": "نبضة المد",
+    "nameEn": "Tide Pulse",
+    "type": "spell",
+    "element": "tide",
+    "textAr": "اسحب ورقة وألحق 400 ضرر.",
+    "effects": [{
+      "trigger": "on_play",
+      "ops": [
+        { "op": "draw", "count": 1 },
+        { "op": "damage", "target": "opponent", "amount": 400 }
+      ]
+    }]
+  },
+  {
+    "id": "stone_skin",
+    "nameAr": "جلد الحجر",
+    "nameEn": "Stone Skin",
+    "type": "spell",
+    "element": "stone",
+    "tags": ["continuous"],
+    "textAr": "تعويذة مستمرة: زد دفاع كل وحوشك بـ 500. تبقى على الساحة.",
+    "effects": [{
+      "trigger": "on_play",
+      "ops": [{ "op": "buff_stat", "target": "all_ally_monsters", "stat": "def", "amount": 500 }]
+    }]
+  },
+  {
+    "id": "aether_surge",
+    "nameAr": "اندفاع الأثير",
+    "nameEn": "Aether Surge",
+    "type": "spell",
+    "element": "aether",
+    "textAr": "زد هجوم كل وحوشك بـ 400.",
+    "effects": [{
+      "trigger": "on_play",
+      "ops": [{ "op": "buff_stat", "target": "all_ally_monsters", "stat": "atk", "amount": 400 }]
+    }]
+  },
+  {
+    "id": "focus_flame",
+    "nameAr": "لهب التركيز",
+    "nameEn": "Focus Flame",
+    "type": "spell",
+    "element": "flame",
+    "textAr": "ألحق 500 ضرر واسحب ورقة.",
+    "effects": [{
+      "trigger": "on_play",
+      "ops": [
+        { "op": "damage", "target": "opponent", "amount": 500 },
+        { "op": "draw", "count": 1 }
+      ]
+    }]
+  },
+  {
+    "id": "light_mend",
+    "nameAr": "رتق النور",
+    "nameEn": "Light Mend",
+    "type": "spell",
+    "element": "light",
+    "textAr": "استعد 800 حياة واسحب ورقة.",
+    "effects": [{
+      "trigger": "on_play",
+      "ops": [
+        { "op": "heal", "target": "self", "amount": 800 },
+        { "op": "draw", "count": 1 }
+      ]
+    }]
+  },
+  {
+    "id": "mirror_snare",
+    "nameAr": "شرك المرآة",
+    "nameEn": "Mirror Snare",
+    "type": "trap",
+    "element": "aether",
+    "textAr": "عند التفعيل: ألحق 700 ضرر بالخصم.",
+    "effects": [{ "trigger": "on_activate", "ops": [{ "op": "damage", "target": "opponent", "amount": 700 }] }]
+  },
+  {
+    "id": "sand_barrier",
+    "nameAr": "حاجز الرمال",
+    "nameEn": "Sand Barrier",
+    "type": "trap",
+    "element": "stone",
+    "textAr": "عند التفعيل: استعد 1000 حياة.",
+    "effects": [{ "trigger": "on_activate", "ops": [{ "op": "heal", "target": "self", "amount": 1000 }] }]
+  },
+  {
+    "id": "void_collapse",
+    "nameAr": "انهيار الفراغ",
+    "nameEn": "Void Collapse",
+    "type": "trap",
+    "element": "shadow",
+    "textAr": "عند التفعيل: دمّر كل وحوش الخصم.",
+    "effects": [{ "trigger": "on_activate", "ops": [{ "op": "destroy_target", "target": "all_enemy_monsters" }] }]
+  },
+  {
+    "id": "ripple_guard",
+    "nameAr": "حارس التموج",
+    "nameEn": "Ripple Guard",
+    "type": "trap",
+    "element": "tide",
+    "textAr": "عند التفعيل: اسحب ورقتين.",
+    "effects": [{ "trigger": "on_activate", "ops": [{ "op": "draw", "count": 2 }] }]
+  },
+  {
+    "id": "solar_trap",
+    "nameAr": "فخ شمسي",
+    "nameEn": "Solar Trap",
+    "type": "trap",
+    "element": "light",
+    "textAr": "عند التفعيل: ألحق 500 ضرر واسحب ورقة.",
+    "effects": [{
+      "trigger": "on_activate",
+      "ops": [
+        { "op": "damage", "target": "opponent", "amount": 500 },
+        { "op": "draw", "count": 1 }
+      ]
+    }]
+  },
+  {
+    "id": "ember_cage",
+    "nameAr": "قفص الجمر",
+    "nameEn": "Ember Cage",
+    "type": "trap",
+    "element": "flame",
+    "textAr": "عند التفعيل: ألحق 1000 ضرر.",
+    "effects": [{ "trigger": "on_activate", "ops": [{ "op": "damage", "target": "opponent", "amount": 1000 }] }]
+  }
+]
