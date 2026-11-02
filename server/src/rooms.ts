@@ -2,7 +2,6 @@ import {
   applyAction,
   buildDefaultDeck,
   createMatch,
-  runAiTurn,
   toPublicView,
   type CardDef,
   type GameAction,
@@ -22,6 +21,8 @@ export interface Room {
   users: Partial<Record<PlayerId, AuthUser>>;
   decks: Partial<Record<PlayerId, string[]>>;
   aiPlayer?: PlayerId;
+  /** يمنع تداخل خطوات الحاسبة أو أفعال اللاعب أثناء دورها */
+  aiBusy: boolean;
   progressRecorded: boolean;
 }
 
@@ -59,6 +60,7 @@ export class RoomManager {
       users: user ? { p1: user } : {},
       decks: { p1: playerDeck, p2: aiDeck },
       aiPlayer: 'p2',
+      aiBusy: false,
       progressRecorded: false,
     };
     this.rooms.set(code, room);
@@ -78,6 +80,7 @@ export class RoomManager {
       sockets: { p1: socketId },
       users: user ? { p1: user } : {},
       decks: { p1: playerDeck },
+      aiBusy: false,
       progressRecorded: false,
     };
     this.rooms.set(code, room);
@@ -118,11 +121,20 @@ export class RoomManager {
   }
 
   apply(room: Room, actor: PlayerId, action: GameAction): void {
+    if (room.aiBusy) throw new Error('انتظر — الخصم يلعب الآن');
     applyAction(room.state, actor, action);
-    if (room.mode === 'ai' && room.aiPlayer && !room.state.winner && room.state.turn === room.aiPlayer) {
-      runAiTurn(room.state, room.aiPlayer);
-    }
     this.maybeRecordProgress(room);
+  }
+
+  /** هل حان دور الحاسبة بعد آخر تحديث؟ */
+  needsAi(room: Room): boolean {
+    return (
+      room.mode === 'ai' &&
+      !!room.aiPlayer &&
+      !room.aiBusy &&
+      !room.state.winner &&
+      room.state.turn === room.aiPlayer
+    );
   }
 
   maybeRecordProgress(room: Room): void {

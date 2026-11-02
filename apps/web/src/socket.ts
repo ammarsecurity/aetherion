@@ -18,6 +18,8 @@ class GameClient {
   you: 'p1' | 'p2' | null = null;
   error = '';
   message = '';
+  /** آخر فعل للخصم/الحاسبة — للرسوم والإعلان */
+  lastOpponentAction: { action: GameAction; actor: string; at: number } | null = null;
   user: User | null = null;
   progress: Progress | null = null;
   decks: Deck[] = [];
@@ -77,6 +79,14 @@ class GameClient {
       this.error = '';
       this.emit();
     });
+    this.socket.on(
+      'opponent_action',
+      (payload: { action: GameAction; actor: string; at: number }) => {
+        this.lastOpponentAction = payload;
+        this.error = '';
+        this.emit();
+      },
+    );
     this.socket.on('error_msg', (payload: { message: string }) => {
       this.error = payload.message;
       this.emit();
@@ -184,6 +194,7 @@ class GameClient {
     this.mode = null;
     this.error = '';
     this.message = '';
+    this.lastOpponentAction = null;
     this.emit();
   }
 

@@ -3,7 +3,13 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { loadAllCards } from '@aetherion/cards';
-import { registerCards, allCards, type GameAction } from '@aetherion/game-core';
+import {
+  applyAction,
+  chooseAiAction,
+  registerCards,
+  allCards,
+  type GameAction,
+} from '@aetherion/game-core';
 import './db.js';
 import { parseBearer } from './auth.js';
 import { authRouter } from './routes/auth.js';
@@ -47,6 +53,77 @@ function pushState(room: Room) {
   }
   if (room.state.winner) {
     io.to(room.code).emit('game_over', { winner: room.state.winner });
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+/** تأخيرات مرئية حتى يرى اللاعب كل خطوة للحاسبة */
+function delayForAction(action: GameAction): { prePush: number; postPush: number } {
+  switch (action.type) {
+    case 'declare_attack':
+      return { prePush: 520, postPush: 980 };
+    case 'summon':
+      return { prePush: 0, postPush: 1200 };
+    case 'set_spell_trap':
+      return { prePush: 0, postPush: 900 };
+    case 'activate_spell':
+    case 'activate_trap':
+      return { prePush: 0, postPush: 1100 };
+    case 'change_position':
+      return { prePush: 0, postPush: 800 };
+    case 'go_phase':
+      return { prePush: 0, postPush: 700 };
+    case 'end_turn':
+      return { prePush: 0, postPush: 550 };
+    default:
+      return { prePush: 0, postPush: 850 };
+  }
+}
+
+function emitOpponentAction(room: Room, action: GameAction, actor: string) {
+  const payload = { action, actor, at: Date.now() };
+  if (room.sockets.p1) io.to(room.sockets.p1).emit('opponent_action', payload);
+  if (room.sockets.p2) io.to(room.sockets.p2).emit('opponent_action', payload);
+}
+
+/** دور الحاسبة خطوة بخطوة مع بث الحالة بعد كل فعل */
+async function runAiSteps(room: Room) {
+  if (!rooms.needsAi(room) || !room.aiPlayer) return;
+  room.aiBusy = true;
+  const aiId = room.aiPlayer;
+  try {
+    let steps = 0;
+    while (!room.state.winner && room.state.turn === aiId && steps < 24) {
+      const action = chooseAiAction(room.state, aiId);
+      if (!action) break;
+
+      try {
+        applyAction(room.state, aiId, action);
+      } catch {
+        try {
+          applyAction(room.state, aiId, { type: 'end_turn' });
+        } catch {
+          /* ignore */
+        }
+        rooms.maybeRecordProgress(room);
+        pushState(room);
+        break;
+      }
+
+      emitOpponentAction(room, action, aiId);
+      const { prePush, postPush } = delayForAction(action);
+      if (prePush > 0) await sleep(prePush);
+      rooms.maybeRecordProgress(room);
+      pushState(room);
+      if (action.type === 'end_turn' || room.state.winner) break;
+      if (postPush > 0) await sleep(postPush);
+      steps += 1;
+    }
+  } finally {
+    room.aiBusy = false;
   }
 }
 
@@ -148,6 +225,7 @@ io.on('connection', (socket) => {
       }
       rooms.apply(room, pid, payload);
       pushState(room);
+      void runAiSteps(room);
     } catch (e) {
       socket.emit('error_msg', { message: (e as Error).message });
     }

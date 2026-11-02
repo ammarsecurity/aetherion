@@ -6,7 +6,6 @@ import DuelCardFace from '../components/duel/DuelCardFace.vue';
 import ZoneSlot from '../components/duel/ZoneSlot.vue';
 import PlayerBadge from '../components/duel/PlayerBadge.vue';
 import PhaseBar from '../components/duel/PhaseBar.vue';
-import ActionPanel from '../components/duel/ActionPanel.vue';
 import AttackBolt from '../components/duel/AttackBolt.vue';
 import CardShatter from '../components/duel/CardShatter.vue';
 import { bindSfxUnlock, duelSfx } from '../audio/duelSfx';
@@ -61,9 +60,15 @@ const prevWinner = ref<string | null>(null);
 const prevFoeMonsterIds = ref<string[]>([]);
 let sfxDestroyBurst = 0;
 const summonFxZone = ref<number | null>(null);
+const foeSummonFxZone = ref<number | null>(null);
 const hitFxZone = ref<number | null>(null);
+const hitFxMyZone = ref<number | null>(null);
 const spellFx = ref(false);
 const directFx = ref(false);
+/** شريط إعلان حركة الخصم/الحاسبة */
+const opponentBanner = ref<string | null>(null);
+let opponentBannerTimer = 0;
+let lastHandledOpponentAt = 0;
 const fieldRef = ref<HTMLElement | null>(null);
 const attackBusy = ref(false);
 const bolt = ref<{
@@ -228,6 +233,16 @@ const canChangePos = computed(() => {
   return !!me.value.monsters[selectedField.value];
 });
 
+/** أزرار خاصة بالورقة المحددة فقط (تظهر تحت اليد) */
+const hasCardActs = computed(
+  () =>
+    canSummon.value ||
+    canSpell.value ||
+    canSetSpell.value ||
+    canSetTrap.value ||
+    canChangePos.value,
+);
+
 const modeLabel = computed(() => (game.mode === 'ai' ? 'ضد الكمبيوتر' : `غرفة ${game.roomCode}`));
 
 const statusHint = computed(() => {
@@ -252,7 +267,7 @@ const statusHint = computed(() => {
     }
     return 'اضغط «هجوم» ثم اختر المهاجم والهدف';
   }
-  if (canSummon.value) return 'اضغط «استدعاء» أو انقر خانة وحش فارغة';
+  if (canSummon.value) return 'انقر خانة وحش فارغة أو «استدعاء» تحت اليد';
   if (canActivateSet.value) return 'ورقة مقلوبة محددة — اضغط «تفعيل»';
   if (canSpellFromHand.value) return 'اضغط «تفعيل تعويذة» أو «تعيين تعويذة»';
   if (canSetTrap.value) return 'اضغط «تعيين فخ» أو انقر خانة فارغة';
@@ -306,6 +321,7 @@ function clearHandSelection() {
 /** معاينة على اللوحة الجانبية فقط — بدون تكبير عائم */
 function peekCard(cardId?: string | null) {
   if (!cardId || cardId === 'hidden') return;
+  if (inspectId.value === cardId) return;
   inspectId.value = cardId;
 }
 
@@ -334,13 +350,13 @@ function selectHand(i: number) {
   selectedAttacker.value = null;
   selectedField.value = null;
   const card = map.value[id];
-  if (card?.type === 'monster') hint.value = 'وحش محدد — اضغط استدعاء أو خانة فارغة';
+  if (card?.type === 'monster') hint.value = 'وحش محدد — اختر وضع الاستدعاء ثم انقر خانة فارغة';
   else if (card?.type === 'spell') {
     selectedSpellZone.value = null;
-    hint.value = 'تعويذة محددة — تفعيل مكشوف أو تعيين مقلوب';
+    hint.value = 'تعويذة — فعّل أو عيّن من الأزرار تحت اليد، أو انقر خانة فارغة للتعيين';
   } else {
     selectedSpellZone.value = null;
-    hint.value = 'فخ محدد — اضغط تعيين فخ';
+    hint.value = 'فخ — عيّنه من الزر تحت اليد أو انقر خانة فارغة';
   }
 }
 
@@ -510,6 +526,18 @@ function pickMySpellTrap(zone: number) {
     setOrActivateOnZone(zone);
     return;
   }
+  // نقرة ثانية على ورقة مقلوبة جاهزة = تفعيل مباشر
+  if (selectedSpellZone.value === zone && !s.faceUp) {
+    const card = map.value[s.cardId];
+    const locked =
+      (card?.type === 'trap' && s.setThisTurn) ||
+      (card?.type === 'spell' && card.tags?.includes('quick') && s.setThisTurn);
+    if (!locked && myTurn.value && (inMain.value || inBattle.value)) {
+      selectedSpellZone.value = zone;
+      activateSelectedSpell();
+      return;
+    }
+  }
   duelSfx.play('select');
   selectedField.value = null;
   selectedSpellZone.value = zone;
@@ -525,7 +553,7 @@ function pickMySpellTrap(zone: number) {
   } else if (card?.type === 'spell' && card.tags?.includes('quick') && s.setThisTurn) {
     hint.value = 'تعويذة سريعة مقلوبة — تُفعَّل من الدور القادم';
   } else {
-    hint.value = 'ورقة مقلوبة — اضغط «تفعيل تعويذة» لتفعيلها';
+    hint.value = 'ورقة مقلوبة — انقر مرة ثانية للتفعيل أو استخدم زر التفعيل';
   }
 }
 
@@ -603,11 +631,11 @@ function pickMyMonster(zone: number) {
   selectedField.value = zone;
   clearHandSelection();
   if (!m.faceUp) {
-    hint.value = 'وحش مقلوب (ضهر الكارت) — اضغط «تغيير الوضع» لقلبه إلى هجوم';
+    hint.value = 'وحش مقلوب — استخدم «تغيير الوضع» لقلبه إلى هجوم';
   } else if (m.position === 'attack') {
-    hint.value = 'وحش محدد — يمكنك تحويله إلى دفاع مكشوف (بالعرض)';
+    hint.value = 'وحش محدد — غيّر الوضع للدفاع أو ادخل مرحلة القتال';
   } else {
-    hint.value = 'دفاع مكشوف — يمكنك تحويله إلى هجوم';
+    hint.value = 'دفاع مكشوف — غيّر الوضع للهجوم من الزر تحت اليد';
   }
 }
 
@@ -711,15 +739,24 @@ function updateAimLine() {
   aimLine.value = { x1: from.x, y1: from.y, x2: to.x, y2: to.y };
 }
 
-async function playBoltTo(fromSel: string, toSel: string, kind: 'monster' | 'direct') {
+async function playBoltTo(
+  fromSel: string,
+  toSel: string,
+  kind: 'monster' | 'direct' | 'direct_in',
+) {
   await nextTick();
   const from = zoneCenter(fromSel);
   let to = zoneCenter(toSel);
-  if (!from || !to) return false;
-  // هجوم مباشر: اضرب أعلى الساحة بقوة (اتجاه حياة الخصم)
-  if (kind === 'direct' && fieldRef.value) {
+  if (!from) return false;
+  // هجوم مباشر: نحو حياة الخصم (أعلى) أو حياتك (أسفل عند هجوم الحاسبة)
+  if (fieldRef.value && (kind === 'direct' || kind === 'direct_in')) {
     const fr = fieldRef.value.getBoundingClientRect();
-    to = { x: fr.width * 0.5, y: 18 };
+    to =
+      kind === 'direct_in'
+        ? { x: fr.width * 0.5, y: fr.height - 22 }
+        : { x: fr.width * 0.5, y: 18 };
+  } else if (!to) {
+    return false;
   }
   aimLine.value = null;
   bolt.value = {
@@ -728,10 +765,10 @@ async function playBoltTo(fromSel: string, toSel: string, kind: 'monster' | 'dir
     x2: to.x,
     y2: to.y,
     active: true,
-    kind,
+    kind: kind === 'monster' ? 'monster' : 'direct',
     key: Date.now(),
   };
-  await new Promise((r) => window.setTimeout(r, kind === 'direct' ? 480 : 320));
+  await new Promise((r) => window.setTimeout(r, kind === 'monster' ? 320 : 480));
   bolt.value = null;
   return true;
 }
@@ -773,7 +810,7 @@ async function onEnemyMonster(zone: number) {
 
   if (!inBattle.value) {
     if (m && hasAttackerReady.value) {
-      hint.value = 'اضغط «مرحلة القتال» أو «هجوم» أولاً';
+      hint.value = 'ادخل مرحلة القتال من وسط الساحة أولاً';
     }
     return;
   }
@@ -1129,7 +1166,16 @@ watch(
     const foeNew = foe.value.monsters.find(
       (m) => m && !prevFoeMonsterIds.value.includes(m.instanceId),
     );
-    if (foeNew) duelSfx.play(foeNew.faceUp ? 'summon' : 'set');
+    if (foeNew) {
+      // الصوت/الإعلان يأتيان من opponent_action؛ هنا فقط FX إن فُقد الحدث
+      const z = foe.value.monsters.findIndex((m) => m?.instanceId === foeNew.instanceId);
+      if (z >= 0 && foeSummonFxZone.value == null) {
+        foeSummonFxZone.value = z;
+        window.setTimeout(() => {
+          if (foeSummonFxZone.value === z) foeSummonFxZone.value = null;
+        }, 1100);
+      }
+    }
     prevFoeMonsterIds.value = foeIds;
 
     // Shatter first using previous snapshot rects (works for AI destroys too)
@@ -1154,10 +1200,134 @@ watch(myTurn, (turn) => {
     selectedAttacker.value = null;
     selectedField.value = null;
     selectedSpellZone.value = null;
+    opponentBanner.value = null;
     hint.value = 'دورك — اختر بطاقة من اليد';
     duelSfx.play('phase');
+  } else if (game.mode === 'ai') {
+    hint.value = 'دور الخصم — راقب ما يفعله…';
   }
 });
+
+function showOpponentBanner(text: string, ms = 1400) {
+  opponentBanner.value = text;
+  hint.value = text;
+  window.clearTimeout(opponentBannerTimer);
+  opponentBannerTimer = window.setTimeout(() => {
+    if (opponentBanner.value === text) opponentBanner.value = null;
+  }, ms);
+}
+
+function localizeLogLine(line: string): string {
+  const you = state.value?.you;
+  if (!you) return line;
+  const foeId = you === 'p1' ? 'p2' : 'p1';
+  return line
+    .replaceAll(you, 'أنت')
+    .replaceAll(foeId, 'الخصم')
+    .replaceAll('p1', 'اللاعب 1')
+    .replaceAll('p2', 'اللاعب 2');
+}
+
+async function reactToOpponentAction(payload: {
+  action: import('../types').GameAction;
+  actor: string;
+  at: number;
+}) {
+  if (payload.at === lastHandledOpponentAt) return;
+  lastHandledOpponentAt = payload.at;
+  // تجاهل أفعال اللاعب نفسه إن وصلت بالخطأ
+  if (state.value && payload.actor === state.value.you) return;
+
+  const action = payload.action;
+  switch (action.type) {
+    case 'summon': {
+      const faceUp = action.faceUp !== false;
+      const pos =
+        action.position === 'defense'
+          ? faceUp
+            ? 'استدعاء دفاع مكشوف'
+            : 'تعيين وحش مقلوب'
+          : 'استدعاء هجوم';
+      showOpponentBanner(`الخصم: ${pos}`, 1300);
+      duelSfx.play(faceUp ? 'summon' : 'set');
+      foeSummonFxZone.value = action.zoneIndex;
+      window.setTimeout(() => {
+        if (foeSummonFxZone.value === action.zoneIndex) foeSummonFxZone.value = null;
+      }, 1100);
+      break;
+    }
+    case 'set_spell_trap':
+      showOpponentBanner('الخصم عيّن تعويذة/فخاً مقلوباً', 1000);
+      duelSfx.play('set');
+      break;
+    case 'activate_spell':
+      showOpponentBanner('الخصم يفعّل تعويذة!', 1200);
+      spellFx.value = true;
+      duelSfx.play('spell');
+      window.setTimeout(() => {
+        spellFx.value = false;
+      }, 900);
+      break;
+    case 'activate_trap':
+      showOpponentBanner('الخصم يفعّل فخاً!', 1200);
+      spellFx.value = true;
+      duelSfx.play('trap');
+      window.setTimeout(() => {
+        spellFx.value = false;
+      }, 900);
+      break;
+    case 'change_position':
+      showOpponentBanner('الخصم غيّر وضع وحش', 900);
+      duelSfx.play('set');
+      break;
+    case 'go_phase':
+      showOpponentBanner(
+        action.phase === 'battle' ? 'الخصم يدخل مرحلة القتال' : `مرحلة الخصم: ${action.phase}`,
+        900,
+      );
+      duelSfx.play('phase');
+      break;
+    case 'declare_attack': {
+      const fromSel = `[data-foe-monster="${action.attackerZone}"]`;
+      if (action.targetZone === 'player') {
+        showOpponentBanner('الخصم يشن هجوماً مباشراً!', 1500);
+        directFx.value = true;
+        duelSfx.play('attack');
+        void playBoltTo(fromSel, '[data-my-life]', 'direct_in');
+        window.setTimeout(() => {
+          directFx.value = false;
+        }, 1050);
+      } else {
+        showOpponentBanner('الخصم يهاجم وحشك!', 1500);
+        hitFxMyZone.value = action.targetZone;
+        duelSfx.play('attack');
+        void playBoltTo(fromSel, `[data-my-monster="${action.targetZone}"]`, 'monster').then(
+          () => {
+            hitFxMyZone.value = null;
+          },
+        );
+      }
+      break;
+    }
+    case 'end_turn':
+      showOpponentBanner('انتهى دور الخصم', 900);
+      duelSfx.play('endTurn');
+      break;
+    default:
+      break;
+  }
+}
+
+watch(
+  () => {
+    void gameRevision.value;
+    return game.lastOpponentAction;
+  },
+  (payload) => {
+    if (!payload) return;
+    void reactToOpponentAction(payload);
+  },
+);
 
 watch(
   () => me.value?.handCount ?? me.value?.hand?.length ?? 0,
@@ -1216,6 +1386,32 @@ onUnmounted(() => {
       <div class="direct-flash" />
       <p class="direct-banner">هجوم مباشر!</p>
     </div>
+    <div v-if="opponentBanner" class="opp-announce" aria-live="polite">
+      <p class="opp-announce-text">{{ opponentBanner }}</p>
+    </div>
+
+    <div
+      v-if="!myTurn && !state.winner"
+      class="turn-glow turn-glow--foe"
+      aria-live="polite"
+      aria-label="دور الخصم"
+    >
+      <span class="turn-glow-wash" aria-hidden="true" />
+      <span class="turn-glow-core" aria-hidden="true" />
+      <span class="turn-glow-edge" aria-hidden="true" />
+      <span class="turn-glow-sparks" aria-hidden="true" />
+    </div>
+    <div
+      v-else-if="myTurn && !state.winner"
+      class="turn-glow turn-glow--me"
+      aria-live="polite"
+      aria-label="دورك"
+    >
+      <span class="turn-glow-wash" aria-hidden="true" />
+      <span class="turn-glow-core" aria-hidden="true" />
+      <span class="turn-glow-edge" aria-hidden="true" />
+      <span class="turn-glow-sparks" aria-hidden="true" />
+    </div>
 
     <header class="top">
       <PlayerBadge name="المنافس" :life="foe.life" side="opponent" :flash="lpFlashFoe" />
@@ -1230,14 +1426,58 @@ onUnmounted(() => {
           <span class="pill-num">{{ state.turnNumber }}</span>
         </span>
         <button
-          class="sfx-btn"
+          class="meta-btn"
+          type="button"
+          :aria-pressed="logOpen"
+          aria-label="سجل المباراة"
+          title="سجل المباراة"
+          @click="logOpen = true"
+        >
+          <span class="meta-btn-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15">
+              <path
+                fill="currentColor"
+                d="M5 4h14a1 1 0 011 1v14l-4-2-4 2-4-2-4 2V5a1 1 0 011-1zm1 2v10.1l2.2-1.1L12 16l3.8-1.9 2.2 1.1V6H6z"
+              />
+            </svg>
+          </span>
+          <span class="meta-btn-label">سجل</span>
+        </button>
+        <button
+          class="meta-btn meta-btn--sfx"
           type="button"
           :aria-pressed="sfxMuted"
           :aria-label="sfxMuted ? 'تشغيل الصوت' : 'كتم الصوت'"
           :title="sfxMuted ? 'تشغيل الصوت' : 'كتم الصوت'"
           @click="toggleSfx"
         >
-          <span aria-hidden="true">{{ sfxMuted ? '🔇' : '🔊' }}</span>
+          <span class="meta-btn-ico" aria-hidden="true">
+            <svg v-if="!sfxMuted" viewBox="0 0 24 24" width="15" height="15" fill="none">
+              <path
+                d="M4 10v4h3.2L12 18V6L7.2 10H4z"
+                fill="currentColor"
+              />
+              <path
+                d="M15.2 9.2a3.2 3.2 0 010 5.6M17.5 7a5.6 5.6 0 010 10"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="15" height="15" fill="none">
+              <path
+                d="M4 10v4h3.2L12 18V6L7.2 10H4z"
+                fill="currentColor"
+              />
+              <path
+                d="M16 9.5l5 5M21 9.5l-5 5"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          <span class="meta-btn-label">{{ sfxMuted ? 'صامت' : 'صوت' }}</span>
         </button>
         <button class="exit" type="button" aria-label="خروج" @click="game.goHome()">
           <span class="exit-ico" aria-hidden="true">
@@ -1421,15 +1661,14 @@ onUnmounted(() => {
                 class="spell-zone"
                 :class="{ readable: !!(s && s.faceUp && s.cardId !== 'hidden') }"
                 @click="onFoeSpell(i)"
+                @mouseenter="peekCard(s?.faceUp && s.cardId !== 'hidden' ? s.cardId : null)"
               >
                 <DuelCardFace
                   v-if="s"
                   class="zone-face"
-                  :class="{ 'can-peek': s.faceUp && s.cardId !== 'hidden' }"
                   :card="s.faceUp && s.cardId !== 'hidden' ? cardOf(s.cardId) : null"
                   :face-down="!s.faceUp || s.cardId === 'hidden'"
                   compact
-                  @mouseenter="peekCard(s.faceUp ? s.cardId : null)"
                 />
                 <span
                   v-if="s?.faceUp && s.cardId !== 'hidden' && cardOf(s.cardId)"
@@ -1476,7 +1715,6 @@ onUnmounted(() => {
                 <DuelCardFace
                   v-if="m"
                   class="zone-face"
-                  :class="{ 'can-peek': m.faceUp && m.cardId !== 'hidden' }"
                   :card="m.faceUp ? cardOf(m.cardId) : null"
                   :face-down="!m.faceUp"
                   compact
@@ -1484,11 +1722,101 @@ onUnmounted(() => {
                   :atk="m.faceUp ? atkOf(m) : undefined"
                   :def="m.faceUp ? defOf(m) : undefined"
                   :hit="hitFxZone === i"
+                  :summoning="foeSummonFxZone === i"
                 />
               </ZoneSlot>
             </div>
 
-            <PhaseBar :phase="state.phase" :your-turn="myTurn" />
+            <div class="mid-strip">
+              <div class="mid-cluster">
+                <PhaseBar :phase="state.phase" :your-turn="myTurn" />
+                <div
+                  v-if="myTurn || hasCardActs"
+                  class="mid-actions"
+                  role="toolbar"
+                  aria-label="أوامر الدور"
+                >
+                  <template v-if="hasCardActs">
+                    <button
+                      v-if="canSummon"
+                      type="button"
+                      class="mid-btn mid-btn--card"
+                      @click="summonSelected"
+                    >
+                      استدعاء
+                    </button>
+                    <button
+                      v-if="canSpell"
+                      type="button"
+                      class="mid-btn mid-btn--card"
+                      @click="activateSelectedSpell"
+                    >
+                      تفعيل
+                    </button>
+                    <button
+                      v-if="canSetSpell"
+                      type="button"
+                      class="mid-btn mid-btn--card"
+                      @click="setSelectedSpell"
+                    >
+                      تعيين تعويذة
+                    </button>
+                    <button
+                      v-if="canSetTrap"
+                      type="button"
+                      class="mid-btn mid-btn--card"
+                      @click="setSelectedTrap"
+                    >
+                      تعيين فخ
+                    </button>
+                    <button
+                      v-if="canChangePos"
+                      type="button"
+                      class="mid-btn mid-btn--card"
+                      @click="changeSelectedPosition"
+                    >
+                      تغيير الوضع
+                    </button>
+                    <span v-if="myTurn" class="mid-sep" aria-hidden="true" />
+                  </template>
+                  <template v-if="myTurn">
+                    <button
+                      v-if="canBattlePhase"
+                      type="button"
+                      class="mid-btn mid-btn--phase"
+                      @click="goBattle"
+                    >
+                      مرحلة القتال
+                    </button>
+                    <button
+                      v-if="inBattle && canAttack"
+                      type="button"
+                      class="mid-btn"
+                      :class="{ armed: attackMode }"
+                      @click="enableAttackMode"
+                    >
+                      {{ attackMode ? 'اختر هدفاً' : 'هجوم' }}
+                    </button>
+                    <button
+                      v-if="canDirect"
+                      type="button"
+                      class="mid-btn mid-btn--hot"
+                      @click="directAttack"
+                    >
+                      هجوم مباشر
+                    </button>
+                    <button
+                      type="button"
+                      class="mid-btn mid-btn--end"
+                      :disabled="!canEnd"
+                      @click="endTurn"
+                    >
+                      إنهاء الدور
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
 
             <div class="row">
               <ZoneSlot
@@ -1505,11 +1833,11 @@ onUnmounted(() => {
                 :defense="m?.position === 'defense'"
                 :class="{ charging: selectedAttacker === i }"
                 @click="pickMyMonster(i)"
+                @mouseenter="peekCard(m?.faceUp ? m.cardId : null)"
               >
                 <DuelCardFace
                   v-if="m"
                   class="zone-face"
-                  :class="{ 'can-peek': m.faceUp && m.cardId !== 'hidden' }"
                   :card="m.faceUp ? cardOf(m.cardId) : null"
                   :face-down="!m.faceUp"
                   compact
@@ -1517,8 +1845,8 @@ onUnmounted(() => {
                   :atk="m.faceUp ? atkOf(m) : undefined"
                   :def="m.faceUp ? defOf(m) : undefined"
                   :summoning="summonFxZone === i"
+                  :hit="hitFxMyZone === i"
                   :selected="selectedAttacker === i || selectedField === i"
-                  @mouseenter="peekCard(m.faceUp ? m.cardId : null)"
                 />
               </ZoneSlot>
             </div>
@@ -1535,16 +1863,15 @@ onUnmounted(() => {
                   ((canSetSpell || canSetTrap) && !s) || selectedSpellZone === i
                 "
                 @click="pickMySpellTrap(i)"
+                @mouseenter="peekCard(s && s.cardId !== 'hidden' ? s.cardId : null)"
               >
                 <DuelCardFace
                   v-if="s"
                   class="zone-face"
-                  :class="{ 'can-peek': s.cardId !== 'hidden' }"
                   :card="s.faceUp && s.cardId !== 'hidden' ? cardOf(s.cardId) : null"
                   :face-down="!s.faceUp"
                   compact
                   :selected="selectedSpellZone === i"
-                  @mouseenter="peekCard(s.cardId !== 'hidden' ? s.cardId : null)"
                 />
                 <span
                   v-if="s?.faceUp && s.cardId !== 'hidden' && cardOf(s.cardId)"
@@ -1614,6 +1941,40 @@ onUnmounted(() => {
             </div>
           </div>
         </Teleport>
+
+        <Teleport to="body">
+          <div
+            v-if="logOpen"
+            class="log-overlay"
+            @click.self="logOpen = false"
+            @keydown.esc.prevent="logOpen = false"
+          >
+            <div
+              class="log-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="سجل المباراة"
+            >
+              <header class="log-modal-head">
+                <strong>سجل المباراة</strong>
+                <span class="log-modal-n">{{ state.log.length }}</span>
+                <button type="button" class="log-modal-close" @click="logOpen = false">
+                  إغلاق
+                </button>
+              </header>
+              <ol v-if="state.log.length" class="log-modal-list">
+                <li
+                  v-for="(line, i) in [...state.log].reverse()"
+                  :key="i"
+                >
+                  <span class="log-modal-idx">{{ state.log.length - i }}</span>
+                  <span class="log-modal-line">{{ localizeLogLine(line) }}</span>
+                </li>
+              </ol>
+              <p v-else class="log-modal-empty">لا أحداث بعد في هذه المباراة</p>
+            </div>
+          </div>
+        </Teleport>
       </div>
 
       <div class="hand-dock">
@@ -1664,38 +2025,6 @@ onUnmounted(() => {
           />
         </div>
       </div>
-
-      <div class="actions-wrap">
-        <ActionPanel
-          :can-summon="canSummon"
-          :can-spell="canSpell"
-          :can-set-spell="canSetSpell"
-          :can-set-trap="canSetTrap"
-          :can-change-pos="canChangePos"
-          :can-battle-phase="canBattlePhase"
-          :can-attack="canAttack"
-          :can-direct="canDirect"
-          :can-end="canEnd"
-          :attack-mode="attackMode"
-          :log-open="logOpen"
-          @summon="summonSelected"
-          @spell="activateSelectedSpell"
-          @set-spell="setSelectedSpell"
-          @set-trap="setSelectedTrap"
-          @change-pos="changeSelectedPosition"
-          @attack="enableAttackMode"
-          @battle-phase="goBattle"
-          @direct="directAttack"
-          @end-turn="endTurn"
-          @toggle-log="logOpen = !logOpen"
-        />
-        <div v-if="logOpen" class="log panel-glass">
-          <ul v-if="state.log.length">
-            <li v-for="(line, i) in state.log" :key="i">{{ line }}</li>
-          </ul>
-          <p v-else class="log-empty">لا أحداث بعد في هذا الدور</p>
-        </div>
-      </div>
     </div>
 
     <footer class="bottom">
@@ -1729,14 +2058,9 @@ onUnmounted(() => {
   z-index: 0;
 }
 
-.top,
-.bottom,
-.layout {
-  position: relative;
-  z-index: 1;
-}
-
 .top {
+  position: relative;
+  z-index: 99999;
   direction: ltr;
   display: flex;
   justify-content: space-between;
@@ -1826,29 +2150,43 @@ onUnmounted(() => {
   box-shadow: 0 2px 0 #1f5fbf;
 }
 
-.sfx-btn {
+.meta-btn {
   appearance: none;
   border: none;
   border-radius: 999px;
-  width: 36px;
   height: 36px;
-  display: grid;
-  place-items: center;
+  padding: 0 12px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: rgba(255, 255, 255, 0.82);
   color: #1d2a44;
-  font-size: 16px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(20, 40, 80, 0.18);
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
-.sfx-btn:hover {
+.meta-btn-ico {
+  display: grid;
+  place-items: center;
+  opacity: 0.9;
+}
+
+.meta-btn:hover {
   filter: brightness(1.05);
   transform: translateY(-1px);
 }
 
-.sfx-btn[aria-pressed='true'] {
-  background: rgba(30, 45, 70, 0.82);
+.meta-btn[aria-pressed='true'] {
+  background: linear-gradient(180deg, #5aa0ff, #2f6fe0);
+  color: #fff;
+}
+
+.meta-btn--sfx[aria-pressed='true'] {
+  background: linear-gradient(180deg, #5a6a82, #2f3b52);
   color: #fff;
 }
 
@@ -1887,20 +2225,22 @@ onUnmounted(() => {
 }
 
 .layout {
+  position: relative;
+  z-index: 2;
   direction: ltr;
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 200px;
+  grid-template-columns: 200px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas:
-    'inspect arena actions'
-    '. hand .';
+    'inspect arena'
+    '. hand';
   gap: 10px 16px;
   padding: 6px 20px 0;
   align-items: start;
   justify-content: center;
   flex: 1;
   min-height: 0;
-  width: min(100%, 1480px);
+  width: min(100%, 1280px);
   margin-inline: auto;
 }
 
@@ -1938,23 +2278,118 @@ onUnmounted(() => {
   overflow: visible;
 }
 
-.actions-wrap {
-  grid-area: actions;
-  display: grid;
-  gap: 8px;
-  justify-items: stretch;
-  align-content: start;
-  align-self: start;
-  padding-top: 0;
-  z-index: 4;
-  width: 100%;
-  max-width: 200px;
-}
-
 .inspect,
-.actions-wrap,
 .arena {
   direction: rtl;
+}
+
+.mid-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  z-index: 3;
+}
+
+.mid-cluster {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: min(100%, 420px);
+  padding: 10px 12px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(220, 235, 255, 0.55));
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 8px 18px rgba(40, 90, 160, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  overflow: visible;
+}
+
+.mid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid rgba(80, 130, 190, 0.16);
+  animation: mid-actions-in 0.2s ease-out;
+}
+
+.mid-sep {
+  width: 1px;
+  height: 22px;
+  margin-inline: 2px;
+  background: rgba(80, 130, 190, 0.28);
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.mid-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #12325a;
+  cursor: pointer;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #f7fbff, #d7e8ff 70%, #c3dbfa);
+  box-shadow:
+    0 3px 8px rgba(40, 90, 160, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+
+.mid-btn:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.mid-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mid-btn--card {
+  color: #0d2f62;
+  background: linear-gradient(180deg, #eaf5ff, #c5e2ff 55%, #9ecfff);
+  border-color: rgba(140, 200, 255, 0.75);
+}
+
+.mid-btn--phase {
+  color: #0d2f62;
+  background: linear-gradient(180deg, #dff0ff, #9fd0ff 55%, #5aa0ef);
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+.mid-btn.armed,
+.mid-btn--hot {
+  color: #fff8f0;
+  background: linear-gradient(180deg, #ff8a5c, #e04828 55%, #b02812);
+  border-color: rgba(255, 220, 180, 0.7);
+}
+
+.mid-btn--end {
+  color: #fff;
+  background: linear-gradient(180deg, #5aa0ff, #2f6fe0 55%, #1f55b8);
+  border-color: rgba(200, 230, 255, 0.8);
+}
+
+@keyframes mid-actions-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .panel-glass {
@@ -2182,6 +2617,47 @@ onUnmounted(() => {
   animation: direct-shake 0.55s ease-in-out;
 }
 
+
+.opp-announce {
+  position: absolute;
+  inset-inline: 0;
+  top: 18%;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  animation: opp-announce-in 0.35s ease-out;
+}
+
+.opp-announce-text {
+  margin: 0;
+  max-width: min(92vw, 520px);
+  padding: 12px 22px;
+  border-radius: 14px;
+  text-align: center;
+  font-size: clamp(16px, 2.8vw, 24px);
+  font-weight: 800;
+  color: #f4fbff;
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, rgba(18, 48, 92, 0.92), rgba(10, 28, 58, 0.88));
+  border: 1px solid rgba(140, 200, 255, 0.45);
+  box-shadow:
+    0 12px 28px rgba(8, 24, 60, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+@keyframes opp-announce-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes direct-flash {
   0% {
     opacity: 0;
@@ -2281,8 +2757,8 @@ onUnmounted(() => {
 .field :deep(.charging .frame) {
   box-shadow:
     0 0 0 3px rgba(93, 228, 255, 0.95),
-    0 0 24px rgba(93, 228, 255, 0.75);
-  animation: charge-pulse 0.75s ease-in-out infinite;
+    0 0 18px rgba(93, 228, 255, 0.55);
+  animation: charge-pulse 1.1s ease-in-out infinite;
 }
 
 .field :deep(.is-target .frame) {
@@ -2314,10 +2790,14 @@ onUnmounted(() => {
 @keyframes charge-pulse {
   0%,
   100% {
-    filter: brightness(1);
+    box-shadow:
+      0 0 0 3px rgba(93, 228, 255, 0.75),
+      0 0 14px rgba(93, 228, 255, 0.4);
   }
   50% {
-    filter: brightness(1.25);
+    box-shadow:
+      0 0 0 3px rgba(93, 228, 255, 1),
+      0 0 26px rgba(93, 228, 255, 0.75);
   }
 }
 
@@ -2351,11 +2831,6 @@ onUnmounted(() => {
   pointer-events: none;
   width: 100%;
   height: 100%;
-}
-
-.zone-face.can-peek {
-  pointer-events: auto;
-  cursor: pointer;
 }
 
 .deck,
@@ -2516,10 +2991,8 @@ onUnmounted(() => {
     filter: drop-shadow(0 6px 12px rgba(20, 40, 80, 0.22));
   }
 
-  /* إطار خفيف بدون filter يسبب وميض */
-  .field :deep(.zone-face.can-peek:hover) {
-    outline: 2px solid rgba(93, 228, 255, 0.85);
-    outline-offset: 1px;
+  .field :deep(.slot.filled:hover .frame) {
+    box-shadow: 0 0 0 2px rgba(93, 228, 255, 0.7), 0 0 12px rgba(93, 228, 255, 0.25);
   }
 }
 
@@ -2528,7 +3001,7 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.field :deep(.zone-face.can-peek) {
+.field :deep(.slot.filled) {
   cursor: pointer;
 }
 
@@ -2553,33 +3026,15 @@ onUnmounted(() => {
   box-shadow: 0 4px 10px rgba(10, 30, 60, 0.35);
 }
 
-.log {
-  width: 188px;
-  max-height: 140px;
-  overflow: auto;
-  padding: 8px 10px;
-  font-size: 12px;
-  color: var(--duel-muted);
-}
-
-.log ul {
-  margin: 0;
-  padding: 0 14px 0 0;
-}
-
-.log-empty {
-  margin: 0;
-  opacity: 0.75;
-  font-size: 12px;
-}
-
 .bottom {
+  position: relative;
   direction: ltr;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 4px 16px 10px;
   flex-wrap: wrap;
+  z-index: 99999;
 }
 
 .bottom :deep(.badge),
@@ -2616,8 +3071,8 @@ onUnmounted(() => {
 
 @media (min-width: 1500px) {
   .layout {
-    grid-template-columns: 220px minmax(0, 1fr) 210px;
-    width: min(100%, 1600px);
+    grid-template-columns: 220px minmax(0, 1fr);
+    width: min(100%, 1400px);
   }
 
   .board {
@@ -2644,7 +3099,7 @@ onUnmounted(() => {
 
 @media (max-width: 1200px) {
   .layout {
-    grid-template-columns: 170px minmax(0, 1fr) 180px;
+    grid-template-columns: 170px minmax(0, 1fr);
     gap: 8px 12px;
     padding: 4px 12px 0;
   }
@@ -2669,11 +3124,10 @@ onUnmounted(() => {
 
 @media (max-width: 1100px) {
   .layout {
-    grid-template-columns: 150px minmax(0, 1fr) 168px;
+    grid-template-columns: 150px minmax(0, 1fr);
   }
 
-  .inspect,
-  .actions-wrap {
+  .inspect {
     max-width: none;
   }
 
@@ -2757,11 +3211,10 @@ onUnmounted(() => {
 
   .layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(220px, 1.35fr) auto auto;
+    grid-template-rows: minmax(220px, 1.35fr) auto;
     grid-template-areas:
       'arena'
-      'hand'
-      'actions';
+      'hand';
     gap: 4px;
     padding: 0 6px;
     min-height: 0;
@@ -2811,22 +3264,15 @@ onUnmounted(() => {
   }
 
   .arena :deep(.bar) {
-    gap: 4px;
-    transform: scale(0.9);
+    transform: scale(0.92);
     transform-origin: center;
-  }
-
-  .arena :deep(.turn) {
-    min-width: 58px;
-    min-height: 28px;
-    font-size: 11px;
-    padding: 4px 10px;
   }
 
   .arena :deep(.step) {
     font-size: 10px;
     padding: 3px 7px;
   }
+
 
   .hand-dock {
     width: 100%;
@@ -2837,21 +3283,25 @@ onUnmounted(() => {
     z-index: 5;
   }
 
-  .actions-wrap {
-    max-width: none;
-    padding-top: 0;
-    justify-items: stretch;
-    width: 100%;
-    z-index: 8;
-    padding-bottom: 0;
-    flex-shrink: 0;
-    max-height: 36dvh;
-    overflow: auto;
+  .mid-cluster {
+    padding: 6px 8px;
+    gap: 6px;
+    border-radius: 14px;
   }
 
-  .actions-wrap .log {
-    width: 100%;
-    max-height: 72px;
+  .mid-btn {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+
+  .meta-btn-label {
+    display: none;
+  }
+
+  .meta-btn {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
 
   .board {
@@ -3047,9 +3497,6 @@ onUnmounted(() => {
     font-size: 12px;
   }
 
-  .actions-wrap {
-    max-height: 30dvh;
-  }
 }
 
 @media (max-height: 900px) and (max-width: 980px) {
@@ -3079,7 +3526,7 @@ onUnmounted(() => {
   }
 
   .layout {
-    grid-template-rows: minmax(190px, 1.4fr) auto auto;
+    grid-template-rows: minmax(190px, 1.4fr) auto;
   }
 
   .hand {
@@ -3097,13 +3544,9 @@ onUnmounted(() => {
   .row :deep(.slot) {
     --slot-short: min(100%, 48px);
   }
-
-  .actions-wrap {
-    max-height: 28dvh;
-  }
 }
 
-/* هاتف بالعرض: ساحة + أزرار جنب بعض */
+/* هاتف بالعرض: ساحة + يد جنب بعض */
 @media (max-height: 500px) and (orientation: landscape) {
   .duel {
     height: 100dvh;
@@ -3121,10 +3564,8 @@ onUnmounted(() => {
 
   .layout {
     grid-template-columns: minmax(0, 1.4fr) minmax(220px, 0.95fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      'arena hand'
-      'arena actions';
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-areas: 'arena hand';
     gap: 4px 8px;
     padding: 0 8px;
     align-items: stretch;
@@ -3187,14 +3628,6 @@ onUnmounted(() => {
 
   .hand-card {
     width: 46px;
-  }
-
-  .actions-wrap {
-    max-height: none;
-    height: auto;
-    min-height: 0;
-    overflow: auto;
-    align-self: stretch;
   }
 
   .bottom {
@@ -3292,5 +3725,381 @@ onUnmounted(() => {
 .gy-card .face {
   width: 100%;
   pointer-events: none;
+}
+
+/* إشعاع الدور — داخل الساحة تحت شارات الحياة */
+.turn-glow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  height: 160px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.turn-glow--me {
+  bottom: 0;
+  animation: turn-glow-in-up 0.45s ease-out;
+}
+
+.turn-glow--foe {
+  top: 0;
+  animation: turn-glow-in-down 0.45s ease-out;
+}
+
+.turn-glow-wash,
+.turn-glow-core,
+.turn-glow-edge,
+.turn-glow-sparks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.turn-glow--me .turn-glow-wash {
+  background:
+    radial-gradient(ellipse 95% 110% at 50% 120%, rgba(50, 140, 240, 0.78), transparent 58%),
+    radial-gradient(ellipse 48% 95% at 10% 115%, rgba(40, 120, 220, 0.5), transparent 62%),
+    radial-gradient(ellipse 48% 95% at 90% 115%, rgba(40, 120, 220, 0.5), transparent 62%),
+    linear-gradient(0deg, rgba(40, 130, 230, 0.62) 0%, rgba(70, 150, 235, 0.24) 42%, transparent 100%);
+  transform-origin: bottom center;
+  animation: turn-glow-breathe 1.7s ease-in-out infinite;
+}
+
+.turn-glow--foe .turn-glow-wash {
+  background:
+    radial-gradient(ellipse 95% 110% at 50% -20%, rgba(220, 45, 40, 0.8), transparent 58%),
+    radial-gradient(ellipse 48% 95% at 10% -15%, rgba(200, 35, 30, 0.52), transparent 62%),
+    radial-gradient(ellipse 48% 95% at 90% -15%, rgba(200, 35, 30, 0.52), transparent 62%),
+    linear-gradient(180deg, rgba(210, 40, 35, 0.66) 0%, rgba(230, 55, 45, 0.26) 42%, transparent 100%);
+  transform-origin: top center;
+  animation: turn-glow-breathe 1.7s ease-in-out infinite;
+}
+
+.turn-glow--me .turn-glow-core {
+  background: radial-gradient(
+    ellipse 58% 80% at 50% 108%,
+    rgba(90, 170, 255, 0.62),
+    rgba(50, 130, 230, 0.32) 42%,
+    transparent 70%
+  );
+  animation: turn-core-sway 2.4s ease-in-out infinite;
+}
+
+.turn-glow--foe .turn-glow-core {
+  background: radial-gradient(
+    ellipse 58% 80% at 50% -8%,
+    rgba(240, 80, 60, 0.62),
+    rgba(210, 40, 35, 0.32) 42%,
+    transparent 70%
+  );
+  animation: turn-core-sway 2.4s ease-in-out infinite;
+}
+
+.turn-glow-edge {
+  left: 0;
+  right: 0;
+  height: 3px;
+}
+
+.turn-glow--me .turn-glow-edge {
+  bottom: 0;
+  top: auto;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(60, 150, 240, 0.5) 12%,
+    rgba(110, 190, 255, 0.82) 50%,
+    rgba(60, 150, 240, 0.5) 88%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 14px 4px rgba(70, 160, 245, 0.5),
+    0 0 36px 12px rgba(50, 140, 230, 0.32),
+    0 -22px 48px 10px rgba(60, 150, 240, 0.22);
+  animation: turn-flare-pulse 1.5s ease-in-out infinite;
+}
+
+.turn-glow--foe .turn-glow-edge {
+  top: 0;
+  bottom: auto;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(220, 55, 45, 0.5) 12%,
+    rgba(245, 100, 80, 0.82) 50%,
+    rgba(220, 55, 45, 0.5) 88%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 14px 4px rgba(230, 60, 50, 0.5),
+    0 0 36px 12px rgba(210, 40, 30, 0.32),
+    0 22px 48px 10px rgba(220, 50, 40, 0.24);
+  animation: turn-flare-pulse 1.5s ease-in-out infinite;
+}
+
+/* نقاط اللهب — تحت/على حافة اللهب فقط، بدون وميض أبيض عبر الصفحة */
+.turn-glow-sparks {
+  left: 0;
+  right: 0;
+  height: 36px;
+  background-image:
+    radial-gradient(circle, rgba(140, 205, 255, 0.95) 0 1.4px, transparent 2px),
+    radial-gradient(circle, rgba(90, 170, 255, 0.85) 0 1.1px, transparent 1.9px),
+    radial-gradient(circle, rgba(170, 220, 255, 0.8) 0 1px, transparent 1.7px),
+    radial-gradient(circle, rgba(70, 150, 240, 0.9) 0 1.3px, transparent 2.1px),
+    radial-gradient(circle, rgba(120, 195, 255, 0.75) 0 0.9px, transparent 1.5px);
+  background-size: 28px 18px, 36px 20px, 22px 16px, 40px 22px, 18px 14px;
+  background-repeat: repeat-x;
+  opacity: 0.85;
+  filter: none;
+}
+
+.turn-glow--me .turn-glow-sparks {
+  top: auto;
+  bottom: 2px;
+  height: 34px;
+  mask-image: linear-gradient(0deg, #000 35%, transparent 100%);
+  -webkit-mask-image: linear-gradient(0deg, #000 35%, transparent 100%);
+  animation: turn-sparks-rise 1.8s linear infinite;
+}
+
+.turn-glow--foe .turn-glow-sparks {
+  top: 2px;
+  bottom: auto;
+  height: 34px;
+  background-image:
+    radial-gradient(circle, rgba(255, 150, 120, 0.95) 0 1.4px, transparent 2px),
+    radial-gradient(circle, rgba(240, 90, 70, 0.85) 0 1.1px, transparent 1.9px),
+    radial-gradient(circle, rgba(255, 180, 150, 0.8) 0 1px, transparent 1.7px),
+    radial-gradient(circle, rgba(230, 70, 55, 0.9) 0 1.3px, transparent 2.1px),
+    radial-gradient(circle, rgba(255, 140, 110, 0.75) 0 0.9px, transparent 1.5px);
+  mask-image: linear-gradient(180deg, #000 35%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 35%, transparent 100%);
+  animation: turn-sparks-fall 1.8s linear infinite;
+}
+
+@keyframes turn-glow-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes turn-glow-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes turn-glow-breathe {
+  0%,
+  100% {
+    opacity: 0.82;
+    transform: scaleY(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.12);
+  }
+}
+
+@keyframes turn-core-sway {
+  0%,
+  100% {
+    transform: translateX(-4%) scale(0.96);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateX(4%) scale(1.06);
+    opacity: 1;
+  }
+}
+
+@keyframes turn-flare-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.25);
+  }
+}
+
+@keyframes turn-sparks-rise {
+  0% {
+    background-position:
+      0 18px,
+      12px 22px,
+      24px 14px,
+      6px 20px,
+      18px 26px;
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 0.95;
+  }
+  100% {
+    background-position:
+      0 -8px,
+      12px -4px,
+      24px -12px,
+      6px -6px,
+      18px 0;
+    opacity: 0.25;
+  }
+}
+
+@keyframes turn-sparks-fall {
+  0% {
+    background-position:
+      0 -8px,
+      12px -4px,
+      24px -12px,
+      6px -6px,
+      18px 0;
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 0.95;
+  }
+  100% {
+    background-position:
+      0 18px,
+      12px 22px,
+      24px 14px,
+      6px 20px,
+      18px 26px;
+    opacity: 0.25;
+  }
+}
+
+.log-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 24, 48, 0.48);
+  backdrop-filter: blur(5px);
+  direction: rtl;
+}
+
+.log-modal {
+  width: min(440px, 100%);
+  max-height: min(72vh, 560px);
+  display: flex;
+  flex-direction: column;
+  padding: 14px 16px 16px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff, #f3f8ff);
+  box-shadow:
+    0 20px 50px rgba(10, 30, 60, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  color: #1a2a44;
+  font-family: Cairo, system-ui, sans-serif;
+  animation: log-modal-in 0.22s ease-out;
+}
+
+.log-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-size: 15px;
+}
+
+.log-modal-n {
+  margin-inline-end: auto;
+  min-width: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(47, 111, 224, 0.12);
+  color: #1f55b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.log-modal-close {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(30, 60, 120, 0.18);
+  background: #f3f6fb;
+  color: #1a2a44;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.log-modal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.log-modal-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(80, 130, 190, 0.14);
+  box-shadow: 0 2px 8px rgba(40, 90, 160, 0.06);
+}
+
+.log-modal-idx {
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #5aa0ff, #2f6fe0);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.log-modal-line {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  color: #243552;
+}
+
+.log-modal-empty {
+  margin: 18px 0;
+  text-align: center;
+  color: #6a7d96;
+  font-size: 13px;
+}
+
+@keyframes log-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>
